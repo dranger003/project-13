@@ -18,37 +18,33 @@ static void signal_handler(int signal)
 
 static void code()
 {
-//    //                         1001001001
-//    struct timespec wait = { 0, 075000000 };
-//    nanosleep(&wait, NULL);
-
-    usleep(40000);
+    usleep(40000); // 40ms
 }
 
 static void run()
 {
     system("setterm -cursor off");
 
-    double target_rate = 23.976216;
-    long ts = 0;
+    double target_rate = 24000 / 1001.0;
+    long t_ts;
     struct timespec time_slice = { 0 }, time_slice_l = { 0 }, time_slice_t = { 0, 1 / target_rate * NSEC_PER_SEC }, time_sync = { 0 };
 
     printf("%.6f\n", time_slice_t.tv_sec + (double)time_slice_t.tv_nsec / NSEC_PER_SEC);
 
     int frame_count = 0;
-    struct timespec a, b;
-    clock_gettime(CLOCK_MONOTONIC, &a);
+    struct timespec time_avg_b, time_avg_e;
+    clock_gettime(CLOCK_MONOTONIC, &time_avg_b);
 
     while (!quit) {
         clock_gettime(CLOCK_MONOTONIC, &time_slice);
 
+        // Stats aren't valid on first loop
         if (frame_count > 0) {
             fprintf(stdout,
-                    "F: %d, E: %.6f, R: %.6f%20s\r",
+                    "F: %d, E: %.6f, R: %.6f\r",
                     frame_count,
-                    time_sync.tv_sec - a.tv_sec + (double)(time_sync.tv_nsec - a.tv_nsec) / NSEC_PER_SEC,
-                    1.0 / (time_sync.tv_sec - time_slice_l.tv_sec + (double)(time_sync.tv_nsec - time_slice_l.tv_nsec) / NSEC_PER_SEC),
-                    " ");
+                    time_sync.tv_sec - time_avg_b.tv_sec + (double)(time_sync.tv_nsec - time_avg_b.tv_nsec) / NSEC_PER_SEC,
+                    1.0 / (time_sync.tv_sec - time_slice_l.tv_sec + (double)(time_sync.tv_nsec - time_slice_l.tv_nsec) / NSEC_PER_SEC));
             fflush(stdout);
         }
 
@@ -59,18 +55,16 @@ static void run()
         // Last time slice
         time_slice_l = time_slice;
 
-        ts = (time_slice.tv_sec + time_slice_t.tv_sec) * NSEC_PER_SEC + time_slice.tv_nsec + time_slice_t.tv_nsec;
-        while (time_sync.tv_sec * NSEC_PER_SEC + time_sync.tv_nsec < ts)
+        t_ts = (time_slice.tv_sec + time_slice_t.tv_sec) * NSEC_PER_SEC + time_slice.tv_nsec + time_slice_t.tv_nsec;
+        while (time_sync.tv_sec * NSEC_PER_SEC + time_sync.tv_nsec < t_ts)
             clock_gettime(CLOCK_MONOTONIC, &time_sync);
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &b);
-    printf("\nF: %d, E: %.6f, R: %.6f",
+    clock_gettime(CLOCK_MONOTONIC, &time_avg_e);
+    printf("\nF: %d, E: %.6f, R: %.6f\n",
            frame_count,
-           (b.tv_sec - a.tv_sec + (double)(b.tv_nsec - a.tv_nsec) / NSEC_PER_SEC),
-           frame_count / (b.tv_sec - a.tv_sec + (double)(b.tv_nsec - a.tv_nsec) / NSEC_PER_SEC));
-
-    printf("\n");
+           (time_avg_e.tv_sec - time_avg_b.tv_sec + (double)(time_avg_e.tv_nsec - time_avg_b.tv_nsec) / NSEC_PER_SEC),
+           frame_count / (time_avg_e.tv_sec - time_avg_b.tv_sec + (double)(time_avg_e.tv_nsec - time_avg_b.tv_nsec) / NSEC_PER_SEC));
 
     system("setterm -cursor on");
 }
